@@ -1,0 +1,196 @@
+IMPORT PySimpleGUI as sg
+
+from tkinter IMPORT filedialog
+
+from pytube IMPORT YouTube
+
+from moviepy.editor IMPORT *
+
+IMPORT os, webbrowser, validators, shutil
+
+from mutagen.easyid3 IMPORT EasyID3
+
+global mp3
+
+
+
+
+
+
+
+DEFINE FUNCTION convertToMp3(filename):
+
+    mp4filename=filename
+
+    mp3filename=filename[:-3]+"mp3"
+
+
+
+    SET audioclip TO AudioFileClip(mp4filename) #turning mp4 into videoclip object
+
+
+
+    audioclip.write_audiofile(mp3filename) #outputting to mp3 filename
+
+    audioclip.close()
+
+    os.remove(filename)
+
+    RETURN mp3filename
+
+
+
+DEFINE FUNCTION tags(mp3filename,values,box):
+
+
+
+    audio=EasyID3(mp3filename)
+
+    audio["title"]=values["-TITLE-"].title()
+
+    audio["artist"]=values["-ARTIST-"].title()
+
+    audio["album"]=values["-ALBUM-"].title()
+
+    audio["date"]=values["-YEAR-"]
+
+    audio["genre"]=values["-GENRE-"].title()
+
+    audio.save(v2_version=3)
+
+
+
+    sg.Popup("Choose where to save your file, note that you will have to add the folder through the library settings screen.")
+
+    mp3=mp3filename
+
+    SET dir TO filedialog.askdirectory()
+
+    TRY:
+
+        shutil.move(mp3, dir)
+
+        sg.Popup("Saved!")
+
+        SET mp3 TO mp3.split("\\")
+
+        SET mp3 TO mp3.pop(-1)
+
+        box.close()
+
+        RETURN dir + "/{}".format(mp3)
+
+
+
+    EXCEPT:
+
+        sg.PopupError("An error occured, check IF the file with the same name is IN the chosen directory")
+
+
+
+
+
+DEFINE FUNCTION download(url):
+
+    allstreamms=YouTube(url).streams.filter(only_audio=True).all()[1]
+
+    OUTPUT(allstreamms)
+
+    SET ytd TO YouTube(url).streams.get_audio_only().download()
+
+    mp3=convertToMp3(ytd)
+
+    RETURN mp3
+
+
+
+DEFINE FUNCTION main():
+
+    mainlayout=[[sg.Text("Josh's Jingles Youtube Downloader")],
+
+            [sg.Text("Link or Search Query:"),sg.Input(key="-URL-"),sg.Button("Submit",bind_RETURN_key=True)]]
+
+    tageditor=[[sg.Text("Tag Editor",justification="c",font="Calibri 48 bold underline italic")],
+
+               [sg.Text("Title:"),sg.Input(enable_events=True,key="-TITLE-")],
+
+               [sg.Text("Artist:"),sg.Input(enable_events=True,key="-ARTIST-")],
+
+               [sg.Text("Album:"),sg.Input(enable_events=True,key="-ALBUM-")],
+
+               [sg.Text("Year:"),sg.Input(enable_events=True,key="-YEAR-")],
+
+               [sg.Text("Genre:"),sg.Input(enable_events=True,key="-GENRE-"),sg.Button("Submit All",key="-TAGSUBMIT-")]]
+
+    layout=[[sg.Column(mainlayout,visible=True,key="-MAINLAYOUTCOLUMN-"),sg.Column(tageditor,visible=False,key="-TAGEDITORCOLUMN-",element_justification="c")]]
+
+    box=sg.Window(title="Josh's Jingles Youtube Downloader",layout=layout,RETURN_keyboard_events=True)
+
+
+
+
+
+    WHILE True:
+
+        event, values=box.read()
+
+
+
+        IF event==sg.WIN_CLOSED:
+
+            box.close()
+
+            break
+
+        IF event EQUALS "Submit":
+
+            INPUTvalue=values["-URL-"]
+
+            box["-URL-"].update("")
+
+            valid=validators.url(INPUTvalue)
+
+            IF valid EQUALS True:
+
+                global mp3
+
+                mp3=download(INPUTvalue)
+
+                OUTPUT(mp3)
+
+                sg.Popup("Done!")
+
+                box["-MAINLAYOUTCOLUMN-"].update(visible=False)
+
+                box["-TAGEDITORCOLUMN-"].update(visible=True)
+
+            ELSE:
+
+                INPUTvalue=str(INPUTvalue)
+
+                INPUTvalue.replace(" ","+")
+
+                yturl="www.youtube.com/results?search_query="+INPUTvalue
+
+                webbrowser.open(yturl)
+
+                gurl="https://www.google.com/search?q="+INPUTvalue
+
+                webbrowser.open(gurl)
+
+
+
+        IF event EQUALS "-TAGSUBMIT-":
+
+            mp3=tags(mp3,values,box)
+
+            RETURN mp3
+
+
+
+
+
+
+
+
+

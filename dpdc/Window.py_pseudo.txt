@@ -1,0 +1,1674 @@
+IMPORT PySimpleGUI as gui
+
+IMPORT os, os.path
+
+IMPORT openpyxl
+
+from openpyxl IMPORT Workbook
+
+from tkinter IMPORT filedialog
+
+from openpyxl.styles IMPORT Font
+
+from tinytag IMPORT TinyTag, TinyTagException
+
+IMPORT Audio_Playback, YTD, playlistFunc
+
+IMPORT datetime, random, time
+
+global window
+
+imagedir="images"
+
+logo=imagedir+"/bigicon.ico"
+
+SET dir_path TO os.path.dirname(os.path.realpath(__file__))
+
+os.chdir(dir_path)
+
+playlistdir="playlists"
+
+
+
+
+
+DEFINE FUNCTION toPercentage(timeinfo):
+
+    times=[]
+
+    current=timeinfo[0]
+
+    total=timeinfo[1]
+
+    FOR i IN (current,total):
+
+        TRY:
+
+            seconds=datetime.datetime.strptime(i,"%H:%M:%S")
+
+        EXCEPT:
+
+            seconds=datetime.datetime.strptime(i,"%M:%S")
+
+        SET a_timedelta TO seconds - datetime.datetime(1900, 1, 1)
+
+        SET seconds TO a_timedelta.total_seconds()
+
+        times.append(seconds)
+
+
+
+    percentage=(times[0]/times[1])*100
+
+    RETURN percentage
+
+
+
+DEFINE FUNCTION toSeconds(percentage,selectedsong):
+
+    SET times TO []
+
+    timeinfo=Audio_Playback.playtime(selectedsong)
+
+    SET current TO timeinfo[0]
+
+    SET total TO timeinfo[1]
+
+    FOR i IN (current, total):
+
+        TRY:
+
+            SET seconds TO datetime.datetime.strptime(i, "%H:%M:%S")
+
+        EXCEPT:
+
+            SET seconds TO datetime.datetime.strptime(i, "%M:%S")
+
+        SET a_timedelta TO seconds - datetime.datetime(1900, 1, 1)
+
+        SET seconds TO a_timedelta.total_seconds()
+
+        times.append(seconds)
+
+
+
+    seconds=times[1]*(percentage/100)
+
+    RETURN seconds
+
+
+
+
+
+#TODO
+
+
+
+#Convert FLACS and other files into mp3
+
+#Create playlist function
+
+
+
+#removing from folder
+
+#13b6d6 - blue
+
+
+
+SET logotheme TO {'BACKGROUND': '#1f1f1f',
+
+                'TEXT': 'white',
+
+                'INPUT': '#ff7145',
+
+                'TEXT_INPUT': '#000000',
+
+                'SCROLL': '#480b9c',
+
+                'BUTTON': ('white', '#480b9c'),
+
+                'PROGRESS': ('#ff7145', '#3f3f3f'),
+
+                'BORDER': 1,
+
+                'SLIDER_DEPTH': 0,
+
+                'PROGRESS_DEPTH': 0}
+
+
+
+gui.theme_add_new("LogoTheme",logotheme)
+
+gui.theme("LogoTheme")
+
+
+
+
+
+DEFINE CLASS Spreadsheet():
+
+    DEFINE FUNCTION libraryCreate(self):  # creates the library with headers
+
+        SET bold TO Font(bold=True, size=13, name="Arial")  # creating a bold font preset
+
+        global sheet1, book
+
+        SET book TO Workbook()  # creating an instance of workbook
+
+        SET sheet1 TO book.active
+
+        SET sheet1.title TO "Library"
+
+        SET x TO 1
+
+        IF os.path.isfile("libpaths.txt") EQUALS False:
+
+            SET f TO open("libpaths.txt", "w+")
+
+            f.close()
+
+        SET columns TO ["null", "Title", "Artists", "Album", "Year", "Genre", "Mood", "Path"]
+
+        FOR i IN range(1, len(columns)):  # FOR loop to create bold headings
+
+            SET cell TO sheet1.cell(row=x, column=i)
+
+            SET cell.value TO columns[i]
+
+            SET cell.font TO bold
+
+        SET column_names TO []
+
+        FOR cell IN sheet1[1]:
+
+            column_names.append(cell.value)
+
+
+
+        book.save("library - do not delete.xlsx")
+
+        RETURN sheet1
+
+
+
+    DEFINE FUNCTION findEmpty(self,column="A"):
+
+        SET row TO 1
+
+        SET foundempty TO False
+
+        WHILE foundempty EQUALS False:
+
+            SET cell TO column + str(row)
+
+            IF sheet1[cell].value EQUALS None:
+
+                SET foundempty TO True
+
+            ELSE:
+
+                row += 1
+
+        SET firstempty TO row
+
+        RETURN firstempty
+
+
+
+    DEFINE FUNCTION tags(self, totaglist):
+
+        SET firstempty TO self.findEmpty()
+
+        FOR j IN range(len(totaglist)):
+
+            SET firstempty TO str(firstempty)
+
+            SET tagged TO totaglist[j]
+
+            SET tagged TO TinyTag.get(tagged)
+
+            SET sheet1["A" + firstempty] TO tagged.title
+
+            SET sheet1["B" + firstempty] TO tagged.artist
+
+            SET sheet1["C" + firstempty] TO tagged.album
+
+            SET sheet1["D" + firstempty] TO tagged.year
+
+            SET sheet1["E" + firstempty] TO tagged.genre
+
+            SET firstempty TO int(firstempty) + 1
+
+            OUTPUT(totaglist[j])
+
+
+
+    DEFINE FUNCTION addFolder(self, book):
+
+        TRY:
+
+
+
+            SET dir TO filedialog.askdirectory()
+
+
+
+
+
+            SET f TO open("libpaths.txt", "r+")
+
+            # IF dir IN f.read():
+
+            #     gui.PopupError("Cannot add folder, folder already IN library")
+
+            # ELSEIF dir not IN f.read():
+
+            f.write(dir + "\n")
+
+            global songpaths, libpaths
+
+            SET libpaths TO f.readlines()
+
+            f.close()
+
+            SET songpaths TO []
+
+            FOR file IN os.scandir(dir):
+
+                OUTPUT(file)
+
+                IF file.name.lower().endswith(".mp3"):# }
+
+                    songpaths.append(file.path)  # adding all songs IN dir to list
+
+            songpaths.insert(0, "null")  # }
+
+
+
+            firstempty=self.findEmpty(column="G")-1
+
+            OUTPUT(firstempty,"firstempty")
+
+            FOR i IN range(0, len(songpaths)):
+
+                SET pathcell TO "G" + (str(firstempty+i))
+
+                OUTPUT(pathcell)
+
+                IF songpaths[i] EQUALS "null":  # catch so null is not included
+
+                    continue
+
+                ELSE:
+
+                    SET sheet1[pathcell] TO songpaths[i]
+
+
+
+
+
+            songpaths.pop(0)
+
+            self.tags(songpaths)
+
+            book.save("library - do not delete.xlsx")
+
+
+
+
+
+            OUTPUT("added songsw")
+
+        except FileNotFoundError:
+
+            gui.Popup("SOmething went wrong")
+
+    DEFINE FUNCTION updateSpreadsheet(self,toadd,sheet,book):
+
+        max=str(self.findEmpty())
+
+        path=toadd
+
+        toadd=TinyTag.get(toadd)
+
+        sheet["A" + max].value=toadd.title
+
+        SET sheet["B" + max].value TO toadd.artist
+
+        SET sheet["C" + max].value TO toadd.album
+
+        SET sheet["D" + max].value TO toadd.year
+
+        SET sheet["E" + max].value TO toadd.genre
+
+        SET sheet["G" + max].value TO path
+
+        book.save("library - do not delete.xlsx")
+
+
+
+
+
+
+
+
+
+DEFINE FUNCTION LBox(key, scrollbar, size=(25, 100)):  # function FOR defining listboxes on homescreen
+
+    SET rclickmenu TO ["Play",["Add to Queue","Add to Playlist"]]
+
+    IF size EQUALS (25, 100):
+
+        SET lboxlayout TO [[gui.Listbox(values=[], enable_events=True, select_mode=gui.LISTBOX_SELECT_MODE_SINGLE,
+
+                                   pad=(0, 0), no_scrollbar=scrollbar, key=key, right_click_menu=rclickmenu,
+
+                                   size=(25, 100))]]
+
+    RETURN gui.Column(layout=lboxlayout, scrollable=False)
+
+
+
+DEFINE FUNCTION getArtists(sheet,mode=1): #mode1 - RETURNing all artists.
+
+    IF mode==1:
+
+        artists=[]
+
+        FOR row IN sheet.iter_rows():
+
+            IF row[0].value IN ("Title", "Artist", "Album", "Year", "Genre", "Mood", "Path"):
+
+                continue
+
+            ELSE:
+
+                artists.append(row[1].value)
+
+        SET artists TO list(dict.fromkeys(artists)) #removing duplicates as dictionaries cant have dupes
+
+        IF None IN artists:
+
+            artists.remove(None)
+
+
+
+        RETURN sorted(artists)
+
+DEFINE FUNCTION getAlbums(sheet):
+
+    albums=[]
+
+    FOR row IN sheet.iter_rows():
+
+        IF row[0].value IN ("Title", "Artist", "Album", "Year", "Genre", "Mood", "Path"):
+
+            continue
+
+        ELSE:
+
+            albums.append(row[2].value)
+
+    SET albums TO list(dict.fromkeys(albums))  # removing duplicates as dictionaries cant have dupes
+
+    IF None IN albums:
+
+        albums.remove(None)
+
+
+
+    RETURN sorted(albums)
+
+
+
+DEFINE FUNCTION getPlaylists():
+
+    playlists=os.listdir(playlistdir)
+
+    IF len(playlists)>0:
+
+        FOR i IN range(len(playlists)):
+
+            playlists[i]=playlists[i][:-4]
+
+    RETURN playlists
+
+
+
+DEFINE FUNCTION controlFunction(sliderkey="-SONGSLIDER-",progresskey="-PROGRESSBAR-",pausekey="-PAUSE-",prevkey="-PREVSONG-",nextkey="-NEXTSONG-",exitkey="-EXIT-",columnkey="-CONTROLCOLUMN-"):
+
+    SET controlcolumn TO [[gui.Slider(enable_events=True, tooltip="Song Progress", disable_number_display=False,
+
+                                 key=sliderkey, size=(30, 25), range=(0, 100)),
+
+                      gui.ProgressBar(orientation="vertical", max_value=100, size=(43, 25), key=progresskey)],
+
+                     [gui.Button("<<", key=prevkey,size=(3,2)),gui.Button("Pause", key=pausekey,size=(5,2)),gui.Button(">>", key=nextkey,size=(3,2))],
+
+                     [gui.Button("Exit", key=exitkey,size=(10,1),button_color=("white","red"))]]
+
+    RETURN gui.Column(layout=controlcolumn,element_justification="c",key=columnkey,pad=(0, 0))
+
+
+
+DEFINE CLASS Layouts():
+
+    # constructor
+
+    SET sortbybar TO [
+
+        [gui.Text("Sort By:"), gui.Button("Title", key="-TITLESORT-"), gui.Button("Artist", key="-ARTISTSORT-"),
+
+         gui.Button("Album", key="-ALBUMSORT-"), gui.Radio(text="Ascending", default=True, group_id="ORDER",enable_events=True,key="-ASCRADIO-"),
+
+         gui.Radio(text="Decending", group_id="ORDER",enable_events=True,key="-DSCRADIO-"), gui.Text("Volume:"),
+
+         gui.Slider(range=(1, 100), default_value=50, orientation="horizontal",key="-VOLSLIDE-",enable_events=True),
+
+         gui.Button(button_text="SHUFFLE: OFF",size=(12,2),key="-SHUFFLE-"),
+
+         gui.Button(button_text="REPEAT: OFF",size=(12,2),key="-REPEAT-"),
+
+         gui.Text("Time elapsed:"),gui.Text("00:00",key="-PLAYHEAD-",pad=(0,0)),gui.Text("of",pad=(0,0)),gui.Text("00:00",key="-LENGTH-",pad=(0,0)),
+
+         gui.Text("   Now playing:",pad=(0,0)),gui.InputText(default_text="----",key="-NOWPLAYING-",readonly=True,size=(37,1))]]
+
+
+
+    SET sortingtabcolumn TO [
+
+        [gui.Button(button_text="Library Settings", key="-LIBRARYSETTINGS-", button_color=("white", "gray"),
+
+                    size=(17, 1))],
+
+        [gui.Text("______________________")],
+
+        [gui.Text(" ", font="any 1")],
+
+
+
+        [gui.Button("SONGS", key="-SONGBUTTON-", font=("Integral 20 bold"), size=(9, 2))],
+
+        [gui.Text("______________________")],
+
+        [gui.Text(" ", font="any 1")],
+
+
+
+        [gui.Button("ARTISTS", key="-ARTISTBUTTON-", font=("Integral 20 bold"), size=(9, 2))],
+
+        [gui.Text("_______________________")],
+
+        [gui.Text(" ", font="any 1")],
+
+
+
+        [gui.Button("ALBUMS", key="-ALBUMBUTTON-", font=("Integral 20 bold"), size=(9, 2))],
+
+        [gui.Text("______________________")],
+
+        [gui.Text(" ", font="any 1")],
+
+
+
+        [gui.Button("PLAYLISTS", key="-PLAYLISTBUTTON-", font=("Integral 20 bold"), size=(9, 2))],
+
+        [gui.Text("______________________")],
+
+        [gui.Text(" ", font="any 1")],
+
+
+
+        [gui.Button("YOUTUBE", key="-YTDBUTTON-", font=("Integral 20 bold"), size=(9, 2))]]
+
+
+
+
+
+
+
+    SET songdisplaycolumn TO [[LBox("-TITLEBOX-", True), LBox("-ARTISTBOX-", True), LBox("-ALBUMBOX-", True), LBox("-YEARBOX-", True),LBox("-GENREBOX-", True), LBox("-PATHBOX-", True)]]
+
+
+
+    artistdisplaycolumn=[[gui.Listbox(values=[],enable_events=True,key="-ARTISTDISPLAYBOX-",size=(159,100))]]
+
+    albumdisplaycolumn=[[gui.Listbox(values=[],enable_events=True,key="-ALBUMDISPLAYBOX-",size=(159,100))]]
+
+    playlistdisplaycolumn=[[gui.Listbox(values=[],enable_events=True,key="-PLAYLISTDISPLAYBOX-",size=(159,100))]]
+
+
+
+
+
+
+
+
+
+    SET librarycolumn1 TO [[gui.Button("Home", key="-HOME-", button_color=("white", "gray")),
+
+                       gui.Text(text="Library Settings", text_color="white", font="Helvetica 26 bold underline",
+
+                                justification="center")],
+
+                      [gui.Button("Reset Library", key="-RESETLIB-", size=(17, 1), button_color=("black", "red"))],
+
+                      [gui.Button("Add folder", key="-ADDFOLDER-", button_color=("white", "gray"), size=(17, 1))]]
+
+
+
+    # entire screen layouts
+
+    SET homescreenLL TO [[gui.HSeparator()],
+
+                  [gui.Column(sortingtabcolumn), gui.VSeparator(),gui.Column(songdisplaycolumn, visible=True, key="-SONGDISPLAYCOLUMN-", vertical_alignment="top",scrollable=True, vertical_scroll_only=True),gui.Column(artistdisplaycolumn,visible=False,key="-ARTISTDISPLAYCOLUMN-",vertical_alignment="top",scrollable=False),gui.Column(albumdisplaycolumn,visible=False,key="-ALBUMDISPLAYCOLUMN-",vertical_alignment="top",scrollable=False),gui.Column(playlistdisplaycolumn,visible=False,key="-PLAYLISTDISPLAYCOLUMN-",vertical_alignment="top",scrollable=False)]]
+
+
+
+
+
+    homescreen=[[gui.Column(layout=sortbybar)],
+
+                [gui.Column(homescreenLL,scrollable=False,element_justification="l"),controlFunction()]]
+
+    SET librarysettings TO [[gui.Column(librarycolumn1)],
+
+                       [gui.Text("Folders IN library:")],
+
+                       [gui.Listbox(values=[], key="-LIBPATHS-", size=(0, 50), background_color="white",
+
+                                    text_color="black", enable_events=True)]]
+
+
+
+
+
+# Funciton to create a library.xlxs file IF one is not present
+
+DEFINE FUNCTION noLibrary():
+
+    SET noliblayout TO [gui.Text("No library detected. Create one?")], \
+
+                  [gui.Button("Create", key="-CREATELIB-")]
+
+
+
+    SET noLibrary TO gui.Window(title="No Library Detected", layout=noliblayout)
+
+    WHILE True:
+
+        SET event, values TO noLibrary.read()
+
+        IF event EQUALS "-CREATELIB-":
+
+            ss.libraryCreate()
+
+            gui.Popup("Library Created!")
+
+            noLibrary.close()
+
+        IF event EQUALS gui.WIN_CLOSED:
+
+            noLibrary.close()
+
+            break
+
+
+
+
+
+
+
+
+
+# main function to start Application
+
+DEFINE FUNCTION musicDict(sheet, window, sortmethod="-TITLESORT-",mode=1,artist=None,album=None,order=True,playlist=None):  # reads songs from xlxs, sorts songs. Default sort is alphabetically by title. Also changes listbox and column size every call. Mode 1 - standard whole library display. Mode 2 - specific artist sort, Mode 3 - specific album sort, Mode 4 - Playlist display
+
+    global titles, artists, albums, years, genres, moods, paths, zippedmetadata
+
+    SET titles TO []
+
+    SET artists TO []
+
+    SET albums TO []
+
+    SET years TO []
+
+    SET genres TO []
+
+    moods=[]
+
+    SET paths TO []
+
+    max=Spreadsheet.findEmpty(Spreadsheet)
+
+    max=max-1
+
+    IF order==True:
+
+        order="asc"
+
+    ELSE:
+
+        order="dsc"
+
+
+
+    IF mode==4:
+
+        FOR i IN range(len(playlist)):
+
+            SET item TO playlist[i]
+
+            titles.append(item[0])
+
+            artists.append(item[1])
+
+            albums.append(item[2])
+
+            years.append(item[3])
+
+            genres.append(item[4])
+
+            moods.append("None")
+
+            paths.append(item[5])
+
+    ELSE:
+
+        FOR row IN sheet.iter_rows(1,max):
+
+            IF row[0].value IN ("Title", "Artist", "Album", "Year", "Genre", "Mood", "Path"):
+
+                continue
+
+            ELSE:
+
+                IF mode==2:
+
+                    OUTPUT(row[1].value)
+
+                    IF row[1].value EQUALS artist:
+
+                        titles.append(row[0].value)
+
+                        artists.append(row[1].value)
+
+                        albums.append(row[2].value)
+
+                        years.append(row[3].value)
+
+                        genres.append(row[4].value)
+
+                        moods.append("None")
+
+                        paths.append(row[6].value)
+
+                        continue
+
+                    ELSE:
+
+                        continue
+
+                ELSEIF mode==3:
+
+                    IF row[2].value EQUALS album:
+
+                        titles.append(row[0].value)
+
+                        artists.append(row[1].value)
+
+                        albums.append(row[2].value)
+
+                        years.append(row[3].value)
+
+                        genres.append(row[4].value)
+
+                        moods.append("None")
+
+                        paths.append(row[6].value)
+
+                        continue
+
+                    ELSE:
+
+                        continue
+
+
+
+
+
+                ELSE:
+
+                    titles.append(row[0].value)
+
+                    artists.append(row[1].value)
+
+                    albums.append(row[2].value)
+
+                    years.append(row[3].value)
+
+                    genres.append(row[4].value)
+
+                    moods.append("None")
+
+                    paths.append(row[6].value)
+
+
+
+
+
+
+
+
+
+    SET zippedmetadata TO zip(titles, artists, albums, years, genres, moods, paths)
+
+    # IF statements deciding how songs will be sorted
+
+    IF sortmethod EQUALS "-TITLESORT-":
+
+        SET zippedmetadata TO sorted(zip(titles, artists, albums, years, genres, moods, paths))  # alphabetical sort by title
+
+
+
+
+
+    ELSEIF sortmethod EQUALS "-ARTISTSORT-":
+
+        SET zippedmetadata TO sorted(
+
+            zip(artists, titles, albums, years, genres, moods, paths))  # alphabetical sory by artist
+
+    ELSEIF sortmethod EQUALS "-ALBUMSORT-":
+
+        SET zippedmetadata TO sorted(zip(albums, titles, artists, years, genres, moods, paths))
+
+
+
+    FOR lis IN (titles, artists, albums, years, genres, moods, paths):  # clearing lists FOR sorting
+
+        lis.clear()
+
+
+
+    FOR i IN range(len(zippedmetadata)):  # Appending sorted values to list after sort
+
+        SET currentsongdata TO zippedmetadata[i]
+
+        titles.append(currentsongdata[0])
+
+        artists.append(currentsongdata[1])
+
+        albums.append(currentsongdata[2])
+
+        years.append(currentsongdata[3])
+
+        genres.append(currentsongdata[4])
+
+        moods.append(currentsongdata[5])
+
+        paths.append(currentsongdata[6])
+
+
+
+    IF order EQUALS "dsc":
+
+        FOR lis IN (titles, artists, albums, years, genres, moods, paths):
+
+            lis.reverse()
+
+
+
+    window["-TITLEBOX-"].update(values=titles)
+
+
+
+    window["-ARTISTBOX-"].update(values=artists)
+
+
+
+    window["-ALBUMBOX-"].update(values=albums)
+
+
+
+    window["-YEARBOX-"].update(values=years)
+
+
+
+    window["-GENREBOX-"].update(values=genres)
+
+
+
+    window["-PATHBOX-"].update(values=paths)
+
+
+
+    FOR event IN ("-TITLEBOX-", "-ARTISTBOX-", "-ALBUMBOX-", "-YEARBOX-", "-GENREBOX-", "-PATHBOX-"): #setting listbox sizes to fit number of items
+
+        SET sizes TO (25, len(titles))
+
+        window[event].set_size(sizes)
+
+
+
+
+
+
+
+    SET pathsize TO (50, len(titles))
+
+    window["-PATHBOX-"].set_size(pathsize)
+
+    SET listboxpixels TO window["-TITLEBOX-"].get_size() #getting size of one listbox
+
+
+
+    IF window["-SONGDISPLAYCOLUMN-"].get_size() != listboxpixels:
+
+        window["-SONGDISPLAYCOLUMN-"].set_size(listboxpixels)  # setting column size to listbox size
+
+        window["-SONGDISPLAYCOLUMN-"].Widget.canvas.yview_moveto(0.0)  # moving scroll heading to top
+
+
+
+DEFINE FUNCTION nowPlaying(selectedsong,sortmode,window): #function FOR updating now playing box at top right
+
+
+
+    IF sortmode EQUALS "-TITLESORT-":
+
+        np=(selectedsong[0]+" - "+selectedsong[1])
+
+    ELSEIF sortmode EQUALS "-ARTISTSORT-":
+
+        np=(selectedsong[1]+" - "+selectedsong[0])
+
+
+
+    window["-NOWPLAYING-"].update(np)
+
+
+
+
+
+DEFINE FUNCTION enQueue(selectedsong,window):
+
+    Fqueue=[]
+
+    leng=len(window["-TITLEBOX-"].get_list_values())
+
+    count=0
+
+    FOR j IN range(leng):
+
+        song=[]
+
+        FOR i IN ("-TITLEBOX-", "-ARTISTBOX-", "-ALBUMBOX-", "-YEARBOX-", "-GENREBOX-", "-PATHBOX-"):
+
+            song.append(window[i].get_list_values()[count])
+
+        count+=1
+
+
+
+        Fqueue.append(song)
+
+
+
+    #search
+
+    counter=1
+
+    FOR i IN range(len(Fqueue)):
+
+        IF Fqueue[i] EQUALS selectedsong:
+
+            break
+
+        ELSE:
+
+            counter+=1
+
+
+
+    prevqueue=Fqueue[:counter]
+
+
+
+    FOR item IN prevqueue:
+
+        IF item IN Fqueue:
+
+            Fqueue.remove(item)
+
+    prevqueue.remove(selectedsong)
+
+
+
+    RETURN Fqueue,prevqueue
+
+
+
+
+
+DEFINE FUNCTION play(selectedsong,vol,start=0.0):
+
+    dontplay=False
+
+    TRY:
+
+        Audio_Playback.play(selectedsong,vol,start)
+
+    EXCEPT:
+
+        dontplay=True
+
+
+
+
+
+    RETURN dontplay
+
+
+
+
+
+DEFINE FUNCTION main():
+
+    global ss, ll
+
+    SET ss TO Spreadsheet()  # defining classes
+
+    SET ll TO Layouts()
+
+    global book, sheet1, sortmode, queue, prevqueue
+
+    sortmode="-TITLESORT-"
+
+    IF os.path.isfile("library - do not delete.xlsx") EQUALS False:
+
+        noLibrary()
+
+        OUTPUT("Creating Library")
+
+    ELSE:
+
+        SET book TO openpyxl.load_workbook("library - do not delete.xlsx")
+
+        SET sheet1 TO book.active
+
+
+
+    IF os.path.exists(os.path.join(os.getcwd(),playlistdir)) EQUALS True:
+
+        PASS
+
+    ELSE:
+
+        os.makedirs(os.path.join(os.getcwd(),playlistdir))
+
+    # layouts: HOME - Homescreen, LIBSETLAYOUT - Library Settings
+
+
+
+    SET layout TO [
+
+        [
+
+            gui.Column(Layouts.homescreen, key="HOMECOLUMN", visible=True),
+
+
+
+            gui.Column(Layouts.librarysettings, key="LIBSETCOLUMN", visible=False, element_justification="l",
+
+                       size=(600, 490))
+
+
+
+        ]
+
+    ]
+
+
+
+    SET window TO gui.Window(title="Josh's Jingles", layout=layout, size=(1530, 795),icon=logo).Finalize()
+
+    musicDict(sheet1, window, sortmethod=sortmode, order=True)
+
+    SET f TO open("libpaths.txt", "r")
+
+    window["-LIBPATHS-"].update(values=f.readlines())
+
+    f.close()
+
+    queue=[]
+
+    prevqueue=[]
+
+    nextsong=False
+
+    prevsong=False
+
+    repeatmode=0
+
+    shuffle=False
+
+    newplaytime=0.0
+
+    WHILE True:
+
+        IF Audio_Playback.getBusy()==1:
+
+            SET event, values TO window.read(timeout=10)
+
+            IF dontplay==False:
+
+                SET times TO Audio_Playback.playtime(selectedsong,newplaytime)
+
+
+
+                window["-PROGRESSBAR-"].update(toPercentage(times))
+
+                window["-PLAYHEAD-"].update(str(times[0])) #updating the status bar
+
+                window["-LENGTH-"].update(str(times[1]))
+
+
+
+                songover=Audio_Playback.endCheck()
+
+                IF songover==True or nextsong==True: #AT THE END OF THE SONG
+
+                    newplaytime=0.0
+
+                    prevqueue.append(selectedsong)
+
+                    IF repeatmode==2:
+
+                        selectedsong=prevqueue.pop(-1)
+
+                    ELSE:
+
+                        TRY:
+
+                            IF shuffle==True:
+
+                                OUTPUT(shuffle)
+
+                                selectedsong=random.choice(queue)
+
+                                queue.remove(selectedsong)
+
+                            ELSE:
+
+
+
+                                    selectedsong=queue.pop(0)
+
+                        except IndexError:
+
+                            OUTPUT("end of queue",repeatmode)
+
+                            IF repeatmode EQUALS 1:
+
+                                queue.clear()
+
+                                selectedsong=prevqueue[0]
+
+                                queue=enQueue(selectedsong,window)[0]
+
+
+
+                    nowPlaying(selectedsong, sortmode, window)
+
+                    dontplay=play(selectedsong,vol=values["-VOLSLIDE-"]/100)
+
+
+
+                    IF dontplay==False:
+
+                        SET times TO Audio_Playback.playtime(selectedsong, 0.0)
+
+
+
+                        window["-SONGSLIDER-"].update(0)
+
+                        window["-PROGRESSBAR-"].update(toPercentage(times))
+
+                        window["-PLAYHEAD-"].update(str(times[0]))
+
+                        window["-LENGTH-"].update(str(times[1]))
+
+
+
+                        nextsong=False
+
+
+
+
+
+
+
+                IF prevsong==True:
+
+
+
+
+
+                    prevsong=False
+
+                    newplaytime=0.0
+
+                    queue.insert(0,selectedsong)
+
+                    TRY:
+
+                        selectedsong=prevqueue.pop()
+
+                    except IndexError:
+
+                        OUTPUT("queue empty")
+
+
+
+
+
+                    dontplay=play(selectedsong,vol=values["-VOLSLIDE-"]/100)
+
+
+
+                    IF dontplay==False:
+
+                        SET times TO Audio_Playback.playtime(selectedsong, 0.0)
+
+                        nowPlaying(selectedsong, sortmode, window)
+
+                        window["-SONGSLIDER-"].update(0)
+
+                        window["-PROGRESSBAR-"].update(toPercentage(times))
+
+                        window["-PLAYHEAD-"].update(str(times[0]))
+
+                        window["-LENGTH-"].update(str(times[1]))
+
+
+
+
+
+
+
+
+
+
+
+
+
+        ELSE:
+
+            SET event, values TO window.read()
+
+        IF event != "__TIMEOUT__":
+
+            OUTPUT(event)
+
+        IF event IN (gui.WIN_CLOSED, "-EXIT-"):
+
+            window.close()
+
+            break
+
+
+
+        IF event EQUALS "-LIBRARYSETTINGS-":
+
+            window["LIBSETCOLUMN"].update(visible=True)
+
+            window["HOMECOLUMN"].update(visible=False)
+
+
+
+        IF event EQUALS "-HOME-":
+
+            window["LIBSETCOLUMN"].update(visible=False)
+
+            window["HOMECOLUMN"].update(visible=True)
+
+            musicDict(sheet1,window,sortmode,mode=1,order=values["-ASCRADIO-"])
+
+
+
+
+
+
+
+
+
+
+
+        IF event EQUALS "-CREATE-":
+
+            ss.libraryCreate()
+
+            gui.popup("Library created!")
+
+
+
+        IF event EQUALS "-ADDFOLDER-":
+
+            SET f TO open("libpaths.txt", "r")
+
+            ss.addFolder(book)
+
+            SET libpaths TO f.readlines()
+
+            f.close()
+
+            window["-LIBPATHS-"].update(values=libpaths)
+
+
+
+        IF event EQUALS "-RESETLIB-":
+
+            SET okcancel TO gui.PopupOKCancel(
+
+                "Resetting the library will remove all attached song folders, and the program will need to be restarted.",
+
+                "Continue?")
+
+            IF okcancel EQUALS "OK":
+
+                window.close()
+
+                os.remove("libpaths.txt")
+
+                os.remove("library - do not delete.xlsx")
+
+
+
+        IF event EQUALS "-LIBPATHS-":
+
+            SET selected TO True
+
+            SET selectedpath TO str(values["-LIBPATHS-"])
+
+            FOR i IN ["[", "]", "'"]:
+
+                SET selectedpath TO selectedpath.replace(i, '')
+
+
+
+
+
+
+
+        IF event IN ("-TITLEBOX-", "-ARTISTBOX-", "-ALBUMBOX-", "-YEARBOX-", "-GENREBOX-", "-PATHBOX-"): #IF SONG SELECTED
+
+            SET indexes TO window[event].GetIndexes()
+
+            SET selectedsong TO []
+
+            FOR event IN ("-TITLEBOX-", "-ARTISTBOX-", "-ALBUMBOX-", "-YEARBOX-", "-GENREBOX-", "-PATHBOX-"): #setting other listboxes to match selected value
+
+                window[event].Update(set_to_index=indexes)
+
+                TRY:
+
+                    prevqueue=[]
+
+                    newplaytime=0.0
+
+                    window["-SONGSLIDER-"].update(newplaytime)
+
+                    selectedsong.append(list(window[event].get_list_values())[indexes[0]])
+
+
+
+                    originsong=selectedsong
+
+
+
+                    dontplay=play(selectedsong, vol=(values["-VOLSLIDE-"] / 100)) #plays the song
+
+                    OUTPUT(dontplay)
+
+                    IF dontplay==False:
+
+
+
+                        window[event].set_value([])
+
+                        nowPlaying(selectedsong, sortmode,
+
+                                   window)  # updates now playing tag with the song, and sortmode FOR order of tags
+
+                        queue=enQueue(selectedsong,window)[0]
+
+                        prevqueue=enQueue(selectedsong,window)[1]
+
+
+
+
+
+
+
+
+
+                # ENTIRE METADATA OF SELECTED SONG
+
+                except IndexError:  # stopping an error being thrown when a empty space is clicked
+
+                    OUTPUT("passed")
+
+                    PASS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        IF event IN ("-TITLESORT-", "-ARTISTSORT-", "-ALBUMSORT-"): # top 3 buttons following sort by:
+
+
+
+            musicDict(sheet1, window, sortmethod=event, order=values["-ASCRADIO-"]) #updating with new sortmode
+
+            sortmode=event
+
+
+
+        IF event IN ("-SONGBUTTON-", "-ARTISTBUTTON-","-ALBUMBUTTON-","-PLAYLISTBUTTON-"):
+
+            IF event EQUALS "-SONGBUTTON-":
+
+                window["-ARTISTDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-ALBUMDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-PLAYLISTDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-SONGDISPLAYCOLUMN-"].update(visible=True)
+
+                musicDict(sheet1,window,sortmode,mode=1,order=values["-ASCRADIO-"])
+
+
+
+
+
+            IF event=="-ARTISTBUTTON-":
+
+                window["-ARTISTDISPLAYBOX-"].update(getArtists(sheet1,mode=1))
+
+                window["-ARTISTDISPLAYCOLUMN-"].update(visible=True)
+
+                window["-SONGDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-ALBUMDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-PLAYLISTDISPLAYCOLUMN-"].update(visible=False)
+
+
+
+            IF event=="-ALBUMBUTTON-":
+
+                window["-ALBUMDISPLAYBOX-"].update(getAlbums(sheet1))
+
+
+
+                window["-ALBUMDISPLAYCOLUMN-"].update(visible=True)
+
+                window["-SONGDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-ARTISTDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-PLAYLISTDISPLAYCOLUMN-"].update(visible=False)
+
+
+
+            IF event=="-PLAYLISTBUTTON-":
+
+                window["-PLAYLISTDISPLAYBOX-"].update(getPlaylists())
+
+                window["-PLAYLISTDISPLAYCOLUMN-"].update(visible=True)
+
+                window["-SONGDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-ARTISTDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-ALBUMDISPLAYCOLUMN-"].update(visible=False)
+
+
+
+
+
+        IF event=="-ARTISTDISPLAYBOX-":
+
+            artist=values["-ARTISTDISPLAYBOX-"][0]
+
+
+
+            window["-ARTISTDISPLAYCOLUMN-"].update(visible=False)
+
+            window["-SONGDISPLAYCOLUMN-"].update(visible=True)
+
+            musicDict(sheet1, window, sortmode, mode=2, artist=artist,order=values["-ASCRADIO-"])
+
+
+
+        IF event=="-ALBUMDISPLAYBOX-":
+
+
+
+            album=values["-ALBUMDISPLAYBOX-"][0]
+
+            OUTPUT(album)
+
+
+
+            window["-ALBUMDISPLAYCOLUMN-"].update(visible=False)
+
+            window["-SONGDISPLAYCOLUMN-"].update(visible=True)
+
+            musicDict(sheet1,window,sortmode,mode=3,album=album,order=values["-ASCRADIO-"])
+
+
+
+        IF event=="-PLAYLISTDISPLAYBOX-":
+
+            TRY:
+
+                playlistlocation=values["-PLAYLISTDISPLAYBOX-"][0]+".txt"
+
+                playlistlocation=playlistdir+"\{}".format(playlistlocation)
+
+                OUTPUT(playlistlocation)
+
+
+
+                with open(playlistlocation) as file:
+
+                    SET playlist TO []
+
+                    FOR line IN file:
+
+                        IF line=="\n":
+
+                            continue
+
+                        ELSE:
+
+                            line=line.rstrip("\n")
+
+                            playlistentry=line.split("***")
+
+                            playlist.append(playlistentry)
+
+                            OUTPUT(playlistentry)
+
+
+
+
+
+                window["-PLAYLISTDISPLAYCOLUMN-"].update(visible=False)
+
+                window["-SONGDISPLAYCOLUMN-"].update(visible=True)
+
+                musicDict(sheet1,window,sortmode,mode=4,playlist=playlist,order=values["-ASCRADIO-"])
+
+            EXCEPT:
+
+                PASS
+
+        IF event EQUALS "-VOLSLIDE-":
+
+            Audio_Playback.setVol(values["-VOLSLIDE-"]/100)
+
+
+
+        IF event EQUALS "-PAUSE-":
+
+            Audio_Playback.pause()
+
+            IF Audio_Playback.getBusy()==1:
+
+                window["-PAUSE-"].update(button_color=("white","#480b9c"))
+
+            ELSE:
+
+                window["-PAUSE-"].update(button_color=(("white","#ff7145")))
+
+        IF event EQUALS "-SONGSLIDER-":
+
+            Audio_Playback.pause()
+
+            window["-PROGRESSBAR-"].update(values["-SONGSLIDER-"])
+
+            TRY:
+
+                newplaytime=toSeconds(values["-SONGSLIDER-"],selectedsong[5])
+
+                play(selectedsong,vol=(values["-VOLSLIDE-"]/100),start=newplaytime)
+
+                Audio_Playback.playtime(selectedsong,newplaytime)
+
+            except UnboundLocalError:
+
+                OUTPUT("no playing soing")
+
+
+
+
+
+        IF event EQUALS "-NEXTSONG-":
+
+            nextsong=True
+
+        IF event EQUALS "-PREVSONG-":
+
+            prevsong=True
+
+
+
+        IF event=="-SHUFFLE-":
+
+
+
+            IF shuffle==False:
+
+
+
+                shuffle=True
+
+                window["-SHUFFLE-"].update(text="SHUFFLE: ON")
+
+                window["-SHUFFLE-"].update(button_color=("white","#ff7145"))
+
+
+
+
+
+            ELSEIF shuffle==True:
+
+                shuffle=False
+
+                window["-SHUFFLE-"].update(text="SHUFFLE: OFF")
+
+                window["-SHUFFLE-"].update(button_color=("white", "#480b9c"))
+
+
+
+        IF event=="-YTDBUTTON-":
+
+            TRY:
+
+                mp3=YTD.main()
+
+                ss.updateSpreadsheet(toadd=mp3,sheet=sheet1,book=book)
+
+                musicDict(sheet1, window,sortmethod=sortmode,order=values["-ASCRADIO-"])
+
+            EXCEPT: #if no song is selected catch the crash
+
+                continue
+
+
+
+
+
+        IF event EQUALS "-REPEAT-":
+
+            IF repeatmode EQUALS 0:
+
+                window["-REPEAT-"].update(text="REPEAT: QUEUE")
+
+                window["-REPEAT-"].update(button_color=("white", "#ff7145"))
+
+                repeatmode=1
+
+            ELSEIF repeatmode EQUALS 1:
+
+                window["-REPEAT-"].update(text="REPEAT: SONG")
+
+                repeatmode=2
+
+            ELSEIF repeatmode EQUALS 2:
+
+                window["-REPEAT-"].update(text="REPEAT: OFF")
+
+                window["-REPEAT-"].update(button_color=("white", "#480b9c"))
+
+                repeatmode=0
+
+
+
+        IF event IN ("-ASCRADIO-","-DSCRADIO-"): #if the two "Ascending" or "Descending" radios are interacted with
+
+            musicDict(sheet1,window,sortmode,order=values["-ASCRADIO-"])
+
+
+
+        IF event=="Add to Playlist":
+
+            TRY:
+
+                playlistFunc.main(originsong,sortmode)
+
+            EXCEPT:
+
+                PASS
+
+
+
+main()
+
